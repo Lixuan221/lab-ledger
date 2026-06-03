@@ -8,6 +8,8 @@ DEFAULT_DATA_DIR = Path(os.getenv("LAB_DATA_DIR", "./data"))
 DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = os.getenv("LAB_DATABASE_URL", f"sqlite:///{DEFAULT_DATA_DIR / 'lab_ledger.db'}")
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 engine = create_engine(
     DATABASE_URL,

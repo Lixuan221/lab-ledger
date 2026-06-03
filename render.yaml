@@ -2,14 +2,10 @@ services:
   - type: web
     name: lab-ledger
     env: docker
-    plan: starter
-    disk:
-      name: lab-ledger-data
-      mountPath: /app/data
-      sizeGB: 1
+    plan: free
     envVars:
-      - key: LAB_DATA_DIR
-        value: /app/data
+      - key: LAB_DATABASE_URL
+        sync: false
       - key: LAB_SECRET_KEY
         generateValue: true
       - key: LAB_ADMIN_PASSWORD
