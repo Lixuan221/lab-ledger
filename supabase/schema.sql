@@ -38,8 +38,8 @@ create table if not exists public.hazardous_reagents (
   formula text not null default '',
   cas text not null default '',
   quantity numeric not null default 0,
-  original_weight numeric not null default 0,
-  current_weight numeric not null default 0,
+  original_weight text not null default '',
+  current_weight text not null default '',
   updated_at timestamptz not null default now()
 );
 
