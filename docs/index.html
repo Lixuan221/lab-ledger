@@ -110,7 +110,7 @@
       if(el){el.className="msg "+(error?"err":"");el.textContent=text;el.style.display="block";}
     }
     function layout(content){
-      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["reagents","化学试剂"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["doc_instrument","仪器操作说明"],["doc_method","实验方法"],["doc_safety","安全规范"],["doc_other","其他资料"],["records","历史记录"]];
+      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["hazardous_reagents","危化品"],["reagents","普通化学试剂"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["doc_instrument","仪器操作说明"],["doc_method","实验方法"],["doc_safety","安全规范"],["doc_other","其他资料"],["records","历史记录"]];
       if(isOwner()) tabs.push(["users","用户管理"]);
       const currentTab = tabs.find(t=>t[0]===view);
       return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="navigate('${t[0]}')">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
@@ -134,7 +134,8 @@
         root.innerHTML=`<div class="login"><form class="box" onsubmit="return false"><h1>实验室共享台账</h1><p>首次使用请注册；已有账号直接登录。</p><div id="login_status" class="msg ${msg.includes("成功")?"":"err"}" style="${msg?"":"display:none"}">${h(msg)}</div><label class="field">邮箱<input id="email" type="email" required></label><label class="field">姓名<input id="full_name"></label><label class="field">密码<input id="password" type="password" required></label><div class="row" id="login_buttons"><button type="button" class="primary" onclick="signIn(event)" ${busy?"disabled":""}>登录</button><button type="button" onclick="signUp(event)" ${busy?"disabled":""}>注册</button></div><p class="muted" style="margin-top:14px">负责人账号注册后，需要在 Supabase SQL Editor 里把该邮箱设为 owner。</p></form></div>`;return}
       if(view==="home") return home();
       if(view==="consumables") return crud("consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""});
-      if(view==="reagents") return crud("reagents","化学试剂",["name:名称","category:类别","specification:规格/浓度","unit:单位","quantity:库存","min_quantity:预警线","location:存放位置","hazard:危险性","custodian:保管人","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"瓶",quantity:0,min_quantity:0,location:"",hazard:"",custodian:"",supplier:"",remark:""});
+      if(view==="hazardous_reagents") return crud("hazardous_reagents","危化品",["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"],{chinese_name:"",formula:"",cas:"",quantity:0,original_weight:0,current_weight:0});
+      if(view==="reagents") return crud("reagents","普通化学试剂",["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"],{chinese_name:"",formula:"",cas:"",quantity:0,original_weight:0,current_weight:0});
       if(view==="equipment") return crud("equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""});
       if(view==="inbound"||view==="checkout") return stock(view);
       if(view.startsWith("doc_")) return documents();
@@ -142,19 +143,21 @@
       if(view==="users") return users();
     }
     async function home(){
-      document.getElementById("root").innerHTML=layout(`<div class="search"><input id="q" placeholder="搜索耗材、设备、规格、位置、负责人" oninput="homeSearch()"></div><div id="results"></div>`);
+      document.getElementById("root").innerHTML=layout(`<div class="search"><input id="q" placeholder="搜索耗材、试剂、设备、CAS、规格、位置、负责人" oninput="homeSearch()"></div><div id="results"></div>`);
       homeSearch();
     }
     async function homeSearch(){
       const q=(document.getElementById("q")||{}).value||"";
       const results = document.getElementById("results");
       if(results) results.innerHTML = `<div class="panel"><div class="loading">正在加载...</div></div>`;
-      const [consumables,equipment]=await Promise.all([
+      const [consumables,hazardous,reagents,equipment]=await Promise.all([
         run(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        run(client.from("hazardous_reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        run(client.from("reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
         run(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[])
       ]);
       if(view !== "home") return;
-      document.getElementById("results").innerHTML=`<div class="panel"><h2>耗材库存</h2>${table(consumables,["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>设备登记</h2>${table(equipment,["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
+      document.getElementById("results").innerHTML=`<div class="panel"><h2>耗材库存</h2>${table(consumables,["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>危化品</h2>${table(hazardous,["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>普通化学试剂</h2>${table(reagents,["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>设备登记</h2>${table(equipment,["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
     }
     function table(rows, fields, ops){
       return `<table><thead><tr>${fields.map(f=>`<th>${f.split(":")[1]}</th>`).join("")}${ops?`<th>操作</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr>${fields.map(f=>{const k=f.split(":")[0];return `<td class="${k==="quantity"&&Number(r.quantity)<=Number(r.min_quantity)?"low":""}">${h(r[k])}</td>`}).join("")}${ops?`<td class="actions">${ops(r)}</td>`:""}</tr>`).join("")}</tbody></table>`;
@@ -176,7 +179,7 @@
       const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k,v])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(v)}"></label>`).join("")}<button class="primary">新增${title}</button></form>`:"";
       document.getElementById("root").innerHTML=layout(`<div class="panel">${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
     }
-    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price"].forEach(k=>{if(k in data)data[k]=Number(data[k]||0)});await run(client.from(tableName).insert(data));delete pageCache[`crud:${tableName}`];render()}
+    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price","original_weight","current_weight"].forEach(k=>{if(k in data)data[k]=Number(data[k]||0)});await run(client.from(tableName).insert(data));delete pageCache[`crud:${tableName}`];render()}
     async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));delete pageCache[`crud:${tableName}`];render()}
     async function fillEdit(tableName,id){msg="当前在线版先支持新增和删除；需要修改请删除后重新新增。";render()}
     async function stock(mode){
@@ -282,8 +285,8 @@
     }
     async function updateRole(id,role){await run(client.from("profiles").update({role}).eq("id",id));render()}
     async function exportExcel(){
-      const [c,e,r]=await Promise.all([run(client.from("consumables").select("*")),run(client.from("equipment").select("*")),run(client.from("stock_records").select("*"))]);
-      const csv = ["耗材库存", toCsv(c), "", "设备登记", toCsv(e), "", "历史记录", toCsv(r)].join("\n");
+      const [c,hz,re,e,r]=await Promise.all([run(client.from("consumables").select("*")),run(client.from("hazardous_reagents").select("*")),run(client.from("reagents").select("*")),run(client.from("equipment").select("*")),run(client.from("stock_records").select("*"))]);
+      const csv = ["耗材库存", toCsv(c), "", "危化品", toCsv(hz), "", "普通化学试剂", toCsv(re), "", "设备登记", toCsv(e), "", "历史记录", toCsv(r)].join("\n");
       const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="实验室共享台账.csv";a.click();
     }
     function toCsv(rows){if(!rows.length)return "";const keys=Object.keys(rows[0]);return [keys.join(","),...rows.map(r=>keys.map(k=>`"${String(r[k]??"").replaceAll('"','""')}"`).join(","))].join("\n")}

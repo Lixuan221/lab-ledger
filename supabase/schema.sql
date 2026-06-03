@@ -25,17 +25,23 @@ create table if not exists public.consumables (
 
 create table if not exists public.reagents (
   id uuid primary key default gen_random_uuid(),
-  name text not null,
-  category text not null default '',
-  specification text not null default '',
-  unit text not null default '瓶',
+  chinese_name text not null default '',
+  formula text not null default '',
+  cas text not null default '',
   quantity numeric not null default 0,
-  min_quantity numeric not null default 0,
-  location text not null default '',
-  hazard text not null default '',
-  custodian text not null default '',
-  supplier text not null default '',
-  remark text not null default '',
+  original_weight numeric not null default 0,
+  current_weight numeric not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.hazardous_reagents (
+  id uuid primary key default gen_random_uuid(),
+  chinese_name text not null default '',
+  formula text not null default '',
+  cas text not null default '',
+  quantity numeric not null default 0,
+  original_weight numeric not null default 0,
+  current_weight numeric not null default 0,
   updated_at timestamptz not null default now()
 );
 
@@ -81,9 +87,27 @@ create table if not exists public.documents (
 alter table public.profiles enable row level security;
 alter table public.consumables enable row level security;
 alter table public.reagents enable row level security;
+alter table public.hazardous_reagents enable row level security;
 alter table public.equipment enable row level security;
 alter table public.stock_records enable row level security;
 alter table public.documents enable row level security;
+
+alter table public.reagents add column if not exists chinese_name text not null default '';
+alter table public.reagents add column if not exists formula text not null default '';
+alter table public.reagents add column if not exists cas text not null default '';
+alter table public.reagents add column if not exists original_weight numeric not null default 0;
+alter table public.reagents add column if not exists current_weight numeric not null default 0;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'reagents' and column_name = 'name'
+  ) then
+    alter table public.reagents alter column name drop not null;
+    alter table public.reagents alter column name set default '';
+  end if;
+end $$;
 
 create or replace function public.current_user_role()
 returns text
@@ -139,6 +163,19 @@ using (true);
 drop policy if exists "reagents_write_owner_member" on public.reagents;
 create policy "reagents_write_owner_member"
 on public.reagents for all
+to authenticated
+using (public.current_user_role() in ('owner', 'member'))
+with check (public.current_user_role() in ('owner', 'member'));
+
+drop policy if exists "hazardous_reagents_select_authenticated" on public.hazardous_reagents;
+create policy "hazardous_reagents_select_authenticated"
+on public.hazardous_reagents for select
+to authenticated
+using (true);
+
+drop policy if exists "hazardous_reagents_write_owner_member" on public.hazardous_reagents;
+create policy "hazardous_reagents_write_owner_member"
+on public.hazardous_reagents for all
 to authenticated
 using (public.current_user_role() in ('owner', 'member'))
 with check (public.current_user_role() in ('owner', 'member'));
@@ -211,6 +248,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists reagents_set_updated_at on public.reagents;
 create trigger reagents_set_updated_at
 before update on public.reagents
+for each row execute function public.set_updated_at();
+
+drop trigger if exists hazardous_reagents_set_updated_at on public.hazardous_reagents;
+create trigger hazardous_reagents_set_updated_at
+before update on public.hazardous_reagents
 for each row execute function public.set_updated_at();
 
 drop trigger if exists equipment_set_updated_at on public.equipment;
