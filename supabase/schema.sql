@@ -1,18 +1,5 @@
 create extension if not exists pgcrypto;
 
-create or replace function public.current_user_role()
-returns text
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    (select role from public.profiles where id = auth.uid() and is_active = true),
-    'readonly'
-  );
-$$;
-
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique,
@@ -67,6 +54,19 @@ alter table public.profiles enable row level security;
 alter table public.consumables enable row level security;
 alter table public.equipment enable row level security;
 alter table public.stock_records enable row level security;
+
+create or replace function public.current_user_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select role from public.profiles where id = auth.uid() and is_active = true),
+    'readonly'
+  );
+$$;
 
 drop policy if exists "profiles_select_authenticated" on public.profiles;
 create policy "profiles_select_authenticated"

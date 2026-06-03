@@ -20,6 +20,7 @@
     let profile = null;
     let view = "home";
     let msg = "";
+    let busy = false;
 
     function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
     function canWrite(){return profile && (profile.role === "owner" || profile.role === "member")}
@@ -48,7 +49,9 @@
       e.preventDefault();
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
+      busy = true; setLoginStatus("正在登录...", false);
       const {data, error} = await client.auth.signInWithPassword({email, password});
+      busy = false;
       if(error){msg = error.message; render(); return}
       session = data.session;
       await loadProfile();
@@ -59,7 +62,9 @@
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
       const fullName = document.getElementById("full_name").value.trim() || email;
+      busy = true; setLoginStatus("正在注册...", false);
       const {data, error} = await client.auth.signUp({email, password, options:{data:{full_name:fullName}}});
+      busy = false;
       if(error){msg = error.message; render(); return}
       msg = data.session ? "注册成功，已登录" : "注册成功，请按 Supabase 设置确认邮箱后再登录";
       session = data.session;
@@ -67,6 +72,11 @@
       render();
     }
     async function logout(){await client.auth.signOut();session=null;profile=null;render()}
+    function setLoginStatus(text, error){
+      const el = document.getElementById("login_status");
+      if(el){el.className = "msg " + (error ? "err" : ""); el.textContent = text; el.style.display = "block";}
+      document.querySelectorAll("#login_buttons button").forEach(btn => btn.disabled = busy);
+    }
     function layout(content){
       const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["records","历史记录"]];
       if(isOwner()) tabs.push(["users","用户管理"]);
@@ -80,7 +90,7 @@
         return;
       }
       if(!session||!profile){
-        root.innerHTML=`<div class="login"><form class="box"><h1>实验室共享台账</h1><p>首次使用请注册；已有账号直接登录。</p>${msg?`<div class="msg err">${h(msg)}</div>`:""}<label class="field">邮箱<input id="email" type="email" required></label><label class="field">姓名<input id="full_name"></label><label class="field">密码<input id="password" type="password" required></label><div class="row"><button class="primary" onclick="signIn(event)">登录</button><button onclick="signUp(event)">注册</button></div><p class="muted" style="margin-top:14px">负责人账号注册后，需要在 Supabase SQL Editor 里把该邮箱设为 owner。</p></form></div>`;return}
+        root.innerHTML=`<div class="login"><form class="box" onsubmit="return false"><h1>实验室共享台账</h1><p>首次使用请注册；已有账号直接登录。</p><div id="login_status" class="msg ${msg.includes("成功")?"":"err"}" style="${msg?"":"display:none"}">${h(msg)}</div><label class="field">邮箱<input id="email" type="email" required></label><label class="field">姓名<input id="full_name"></label><label class="field">密码<input id="password" type="password" required></label><div class="row" id="login_buttons"><button type="button" class="primary" onclick="signIn(event)" ${busy?"disabled":""}>登录</button><button type="button" onclick="signUp(event)" ${busy?"disabled":""}>注册</button></div><p class="muted" style="margin-top:14px">负责人账号注册后，需要在 Supabase SQL Editor 里把该邮箱设为 owner。</p></form></div>`;return}
       if(view==="home") return home();
       if(view==="consumables") return crud("consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""});
       if(view==="equipment") return crud("equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""});
