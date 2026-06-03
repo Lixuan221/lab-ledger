@@ -28,6 +28,7 @@
     let renderSeq = 0;
     let homeSearchSeq = 0;
     let homeSearchTimer = null;
+    let editingCrud = null;
 
     function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
     function canWrite(){return profile && (profile.role === "owner" || profile.role === "member")}
@@ -132,6 +133,7 @@
     function navigate(nextView){
       view=nextView;
       msg="";
+      editingCrud=null;
       render();
     }
     async function render(){
@@ -197,11 +199,29 @@
     }
     function renderCrud(tableName,title,fields,defaults,rows,loading){
       crudImportConfigs[tableName] = {fields, defaults};
-      const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k,v])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(v)}"></label>`).join("")}<button class="primary">新增${title}</button></form>`:"";
+      const editRow = editingCrud && editingCrud.tableName===tableName ? editingCrud.row : null;
+      const values = editRow ? {...defaults, ...editRow} : defaults;
+      const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(values[k])}"></label>`).join("")}<button class="primary">${editRow?`保存修改`:`新增${title}`}</button>${editRow?`<button type="button" onclick="cancelEdit()">取消编辑</button>`:""}</form>`:"";
       const importer=canWrite()?`<div class="panel" style="margin-bottom:12px"><h2>Excel 批量导入</h2><p class="muted">第一行表头请使用：${fields.map(f=>f.split(":")[1]).join("、")}。支持 .xlsx、.xls、.csv。</p><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel('${tableName}', event)"><div id="import_status_${tableName}" class="msg" style="display:none"></div></div>`:"";
       document.getElementById("root").innerHTML=layout(`${importer}<div class="panel">${loading?`<div class="loading">正在后台加载${h(title)}...</div>`:""}${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
     }
-    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price","original_weight","current_weight"].forEach(k=>{if(k in data)data[k]=toNumber(data[k])});await run(client.from(tableName).insert(data));delete pageCache[`crud:${tableName}`];if(tableName==="consumables") delete pageCache.stockItems;delete pageCache.home;render()}
+    async function saveCrud(e,tableName){
+      e.preventDefault();
+      const data=Object.fromEntries(new FormData(e.target));
+      ["quantity","min_quantity","price","original_weight","current_weight"].forEach(k=>{if(k in data)data[k]=toNumber(data[k])});
+      if(editingCrud && editingCrud.tableName===tableName){
+        await run(client.from(tableName).update(data).eq("id",editingCrud.row.id));
+        editingCrud=null;
+        msg="修改已保存";
+      }else{
+        await run(client.from(tableName).insert(data));
+        msg="新增成功";
+      }
+      delete pageCache[`crud:${tableName}`];
+      if(tableName==="consumables") delete pageCache.stockItems;
+      delete pageCache.home;
+      render();
+    }
     function toNumber(value){
       if(value === null || value === undefined) return 0;
       if(typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -275,8 +295,16 @@
       msg = `已成功导入 ${data.length} 条记录`;
       render();
     }
-    async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));delete pageCache[`crud:${tableName}`];if(tableName==="consumables") delete pageCache.stockItems;delete pageCache.home;render()}
-    async function fillEdit(tableName,id){msg="当前在线版先支持新增和删除；需要修改请删除后重新新增。";render()}
+    async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));if(editingCrud&&editingCrud.row.id===id) editingCrud=null;delete pageCache[`crud:${tableName}`];if(tableName==="consumables") delete pageCache.stockItems;delete pageCache.home;render()}
+    async function fillEdit(tableName,id){
+      const cacheKey=`crud:${tableName}`;
+      let row=(pageCache[cacheKey]||[]).find(item=>item.id===id);
+      if(!row) row=await run(client.from(tableName).select("*").eq("id",id).single());
+      editingCrud={tableName,row};
+      msg="正在编辑，修改上方表单后点击保存修改。";
+      render();
+    }
+    function cancelEdit(){editingCrud=null;msg="";render()}
     async function stock(mode,seq){
       const expected = view;
       renderStock(mode,pageCache.stockItems || [], !pageCache.stockItems);
