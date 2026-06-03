@@ -49,6 +49,7 @@
       e.preventDefault();
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
+      if(!email || !password){setLoginStatus("请填写邮箱和密码。", true); return}
       busy = true; setLoginStatus("正在登录...", false);
       const {data, error} = await client.auth.signInWithPassword({email, password});
       busy = false;
@@ -62,6 +63,8 @@
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
       const fullName = document.getElementById("full_name").value.trim() || email;
+      if(!email || !password){setLoginStatus("请填写邮箱和密码。", true); return}
+      if(password.length < 6){setLoginStatus("密码至少需要 6 位。", true); return}
       busy = true; setLoginStatus("正在注册...", false);
       const {data, error} = await client.auth.signUp({email, password, options:{data:{full_name:fullName}}});
       busy = false;
