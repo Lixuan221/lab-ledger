@@ -110,7 +110,7 @@
       if(el){el.className="msg "+(error?"err":"");el.textContent=text;el.style.display="block";}
     }
     function layout(content){
-      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["doc_instrument","仪器操作说明"],["doc_method","实验方法"],["doc_safety","安全规范"],["doc_other","其他资料"],["records","历史记录"]];
+      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["reagents","化学试剂"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["doc_instrument","仪器操作说明"],["doc_method","实验方法"],["doc_safety","安全规范"],["doc_other","其他资料"],["records","历史记录"]];
       if(isOwner()) tabs.push(["users","用户管理"]);
       const currentTab = tabs.find(t=>t[0]===view);
       return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="navigate('${t[0]}')">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
@@ -134,6 +134,7 @@
         root.innerHTML=`<div class="login"><form class="box" onsubmit="return false"><h1>实验室共享台账</h1><p>首次使用请注册；已有账号直接登录。</p><div id="login_status" class="msg ${msg.includes("成功")?"":"err"}" style="${msg?"":"display:none"}">${h(msg)}</div><label class="field">邮箱<input id="email" type="email" required></label><label class="field">姓名<input id="full_name"></label><label class="field">密码<input id="password" type="password" required></label><div class="row" id="login_buttons"><button type="button" class="primary" onclick="signIn(event)" ${busy?"disabled":""}>登录</button><button type="button" onclick="signUp(event)" ${busy?"disabled":""}>注册</button></div><p class="muted" style="margin-top:14px">负责人账号注册后，需要在 Supabase SQL Editor 里把该邮箱设为 owner。</p></form></div>`;return}
       if(view==="home") return home();
       if(view==="consumables") return crud("consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""});
+      if(view==="reagents") return crud("reagents","化学试剂",["name:名称","category:类别","specification:规格/浓度","unit:单位","quantity:库存","min_quantity:预警线","location:存放位置","hazard:危险性","custodian:保管人","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"瓶",quantity:0,min_quantity:0,location:"",hazard:"",custodian:"",supplier:"",remark:""});
       if(view==="equipment") return crud("equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""});
       if(view==="inbound"||view==="checkout") return stock(view);
       if(view.startsWith("doc_")) return documents();

@@ -23,6 +23,22 @@ create table if not exists public.consumables (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.reagents (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  category text not null default '',
+  specification text not null default '',
+  unit text not null default '瓶',
+  quantity numeric not null default 0,
+  min_quantity numeric not null default 0,
+  location text not null default '',
+  hazard text not null default '',
+  custodian text not null default '',
+  supplier text not null default '',
+  remark text not null default '',
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.equipment (
   id uuid primary key default gen_random_uuid(),
   asset_no text not null unique,
@@ -64,6 +80,7 @@ create table if not exists public.documents (
 
 alter table public.profiles enable row level security;
 alter table public.consumables enable row level security;
+alter table public.reagents enable row level security;
 alter table public.equipment enable row level security;
 alter table public.stock_records enable row level security;
 alter table public.documents enable row level security;
@@ -109,6 +126,19 @@ using (true);
 drop policy if exists "consumables_write_owner_member" on public.consumables;
 create policy "consumables_write_owner_member"
 on public.consumables for all
+to authenticated
+using (public.current_user_role() in ('owner', 'member'))
+with check (public.current_user_role() in ('owner', 'member'));
+
+drop policy if exists "reagents_select_authenticated" on public.reagents;
+create policy "reagents_select_authenticated"
+on public.reagents for select
+to authenticated
+using (true);
+
+drop policy if exists "reagents_write_owner_member" on public.reagents;
+create policy "reagents_write_owner_member"
+on public.reagents for all
 to authenticated
 using (public.current_user_role() in ('owner', 'member'))
 with check (public.current_user_role() in ('owner', 'member'));
@@ -176,6 +206,11 @@ $$;
 drop trigger if exists consumables_set_updated_at on public.consumables;
 create trigger consumables_set_updated_at
 before update on public.consumables
+for each row execute function public.set_updated_at();
+
+drop trigger if exists reagents_set_updated_at on public.reagents;
+create trigger reagents_set_updated_at
+before update on public.reagents
 for each row execute function public.set_updated_at();
 
 drop trigger if exists equipment_set_updated_at on public.equipment;
