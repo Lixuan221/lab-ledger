@@ -105,6 +105,10 @@
       if(el){el.className = "msg " + (error ? "err" : ""); el.textContent = text; el.style.display = "block";}
       document.querySelectorAll("#login_buttons button").forEach(btn => btn.disabled = busy);
     }
+    function setInlineStatus(id,text,error){
+      const el=document.getElementById(id);
+      if(el){el.className="msg "+(error?"err":"");el.textContent=text;el.style.display="block";}
+    }
     function layout(content){
       const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["doc_instrument","仪器操作说明"],["doc_method","实验方法"],["doc_safety","安全规范"],["doc_other","其他资料"],["records","历史记录"]];
       if(isOwner()) tabs.push(["users","用户管理"]);
@@ -216,39 +220,39 @@
       renderDocuments(rows);
     }
     function renderDocuments(rows){
-      const form=canWrite()?`<form class="stack" onsubmit="saveDocument(event)"><input type="hidden" name="category" value="${h(documentCategory)}"><div class="grid"><label>标题<input name="title" required></label><label>适用对象<input name="target" placeholder="例如 PCR 仪、凝胶电泳"></label><label>外部链接<input name="external_link" placeholder="PDF、视频或共享文档链接"></label></div><label>正文<textarea name="content" rows="8" style="resize:vertical;border:1px solid #cfd8dd;border-radius:6px;padding:10px;font:inherit"></textarea></label><button class="primary">新增${h(documentCategory)}</button></form><br>`:"";
+      const form=canWrite()?`<form class="stack" onsubmit="saveDocument(event)"><div id="document_status" class="msg" style="display:none"></div><input type="hidden" name="category" value="${h(documentCategory)}"><div class="grid"><label>标题<input name="title" required></label><label>适用对象<input name="target" placeholder="例如 PCR 仪、凝胶电泳"></label><label>外部链接<input name="external_link" placeholder="PDF、视频或共享文档链接"></label></div><label>正文<textarea name="content" rows="8" style="resize:vertical;border:1px solid #cfd8dd;border-radius:6px;padding:10px;font:inherit"></textarea></label><button class="primary" data-label="新增${h(documentCategory)}">新增${h(documentCategory)}</button></form><br>`:"";
       const cards=rows.map(r=>`<div class="panel" style="margin-bottom:12px"><h2>${h(r.title)}</h2><p>${h(r.category)} · ${h(r.target || "通用")} · 更新于 ${new Date(r.updated_at).toLocaleString("zh-CN",{hour12:false})}</p><div style="white-space:pre-wrap;line-height:1.65">${h(r.content)}</div>${r.external_link?`<p style="margin-top:12px"><a href="${h(r.external_link)}" target="_blank" rel="noopener">打开外部链接</a></p>`:""}<p class="muted">发布人：${h(r.profiles ? (r.profiles.full_name || r.profiles.username) : "")}</p><div class="actions">${canWrite()&&(isOwner()||r.author_id===profile.id)?`<button onclick="editDocument('${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="deleteDocument('${r.id}')">删除</button>`:""}</div></div>`).join("");
       document.getElementById("root").innerHTML=layout(`<div>${form}${cards || `<div class="panel"><div class="loading">暂无${h(documentCategory)}。</div></div>`}</div>`);
     }
     async function saveDocument(e){
       e.preventDefault();
       const submitButton = e.target.querySelector("button");
+      const buttonLabel = submitButton ? submitButton.dataset.label : "新增资料";
       if(submitButton){submitButton.disabled = true; submitButton.textContent = "正在保存...";}
       const data=Object.fromEntries(new FormData(e.target));
       data.title = (data.title || "").trim();
       data.content = data.content || "";
       if(!data.title){
-        msg="请填写资料标题";
-        if(submitButton){submitButton.disabled = false; submitButton.textContent = "新增资料";}
-        render();
+        setInlineStatus("document_status","请填写资料标题",true);
+        if(submitButton){submitButton.disabled = false; submitButton.textContent = buttonLabel;}
         return;
       }
       data.author_id=profile.id;
+      setInlineStatus("document_status","正在保存，请稍候...",false);
       let error = null;
       try{
         const res = await retryTask(() => client.from("documents").insert(data));
         error = res.error;
       }catch(err){error = err}
       if(error){
-        msg=errorText(error);
-        if(submitButton){submitButton.disabled = false; submitButton.textContent = "新增资料";}
-        render();
+        setInlineStatus("document_status",errorText(error),true);
+        if(submitButton){submitButton.disabled = false; submitButton.textContent = buttonLabel;}
         return;
       }
-      msg="资料已新增";
+      setInlineStatus("document_status","资料已新增",false);
       delete pageCache[`documents:${data.category}`];
       e.target.reset();
-      render();
+      setTimeout(render, 500);
     }
     async function editDocument(id){
       const row=await run(client.from("documents").select("*").eq("id",id).single());
