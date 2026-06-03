@@ -65,6 +65,8 @@ npm run dev
 如果想通过 GitHub + Render 托管平台发布公网网址，请看 `RENDER_DEPLOY.md`。
 
 如果想尽量不缴费，请看 `FREE_DEPLOY.md`。
+
+如果 Render 要求绑卡，请改用 `VERCEL_DEPLOY.md`。
 *** Add File: .gitignore
 .venv/
 node_modules/
