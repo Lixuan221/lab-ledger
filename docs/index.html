@@ -29,10 +29,19 @@
     function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
     function canWrite(){return profile && (profile.role === "owner" || profile.role === "member")}
     function isOwner(){return profile && profile.role === "owner"}
-    async function run(promise){
+    async function run(promise, options={}){
       msg = "";
       const {data, error} = await promise;
-      if(error){msg = error.message || "请求失败"; render(); throw error}
+      if(error){
+        msg = error.message || "请求失败";
+        if(options.renderOnError !== false) render();
+        throw error;
+      }
+      return data;
+    }
+    async function quietRun(promise){
+      const {data, error} = await promise;
+      if(error) throw error;
       return data;
     }
     async function retryTask(task, attempts=3){
@@ -153,10 +162,10 @@
       const results = document.getElementById("results");
       if(results) results.innerHTML = `<div class="panel"><div class="loading">正在加载...</div></div>`;
       const [consumables,hazardous,reagents,equipment]=await Promise.all([
-        run(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]),
-        run(client.from("hazardous_reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
-        run(client.from("reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
-        run(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[])
+        quietRun(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        quietRun(client.from("hazardous_reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        quietRun(client.from("reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        quietRun(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[])
       ]);
       if(view !== "home") return;
       document.getElementById("results").innerHTML=`<div class="panel"><h2>耗材库存</h2>${table(consumables,["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>危化品</h2>${table(hazardous,["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>普通化学试剂</h2>${table(reagents,["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>设备登记</h2>${table(equipment,["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
@@ -172,7 +181,10 @@
       }else{
         document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载${title}...</div></div>`);
       }
-      const rows=await run(client.from(tableName).select("*").order("updated_at",{ascending:false})).catch(()=>[]);
+      const rows=await run(client.from(tableName).select("*").order("updated_at",{ascending:false}), {renderOnError:false}).catch(error=>{
+        msg = errorText(error);
+        return [];
+      });
       if(view !== expected) return;
       pageCache[cacheKey]=rows;
       renderCrud(tableName,title,fields,defaults,rows);
@@ -349,7 +361,13 @@
     }
     async function updateRole(id,role){await run(client.from("profiles").update({role}).eq("id",id));render()}
     async function exportExcel(){
-      const [c,hz,re,e,r]=await Promise.all([run(client.from("consumables").select("*")),run(client.from("hazardous_reagents").select("*")),run(client.from("reagents").select("*")),run(client.from("equipment").select("*")),run(client.from("stock_records").select("*"))]);
+      const [c,hz,re,e,r]=await Promise.all([
+        quietRun(client.from("consumables").select("*")).catch(()=>[]),
+        quietRun(client.from("hazardous_reagents").select("*")).catch(()=>[]),
+        quietRun(client.from("reagents").select("*")).catch(()=>[]),
+        quietRun(client.from("equipment").select("*")).catch(()=>[]),
+        quietRun(client.from("stock_records").select("*")).catch(()=>[])
+      ]);
       const csv = ["耗材库存", toCsv(c), "", "危化品", toCsv(hz), "", "普通化学试剂", toCsv(re), "", "设备登记", toCsv(e), "", "历史记录", toCsv(r)].join("\n");
       const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="实验室共享台账.csv";a.click();
     }
