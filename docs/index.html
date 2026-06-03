@@ -195,7 +195,17 @@
       const importer=canWrite()?`<div class="panel" style="margin-bottom:12px"><h2>Excel 批量导入</h2><p class="muted">第一行表头请使用：${fields.map(f=>f.split(":")[1]).join("、")}。支持 .xlsx、.xls、.csv。</p><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel('${tableName}', event)"><div id="import_status_${tableName}" class="msg" style="display:none"></div></div>`:"";
       document.getElementById("root").innerHTML=layout(`${importer}<div class="panel">${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
     }
-    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price","original_weight","current_weight"].forEach(k=>{if(k in data)data[k]=Number(data[k]||0)});await run(client.from(tableName).insert(data));delete pageCache[`crud:${tableName}`];render()}
+    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price","original_weight","current_weight"].forEach(k=>{if(k in data)data[k]=toNumber(data[k])});await run(client.from(tableName).insert(data));delete pageCache[`crud:${tableName}`];render()}
+    function toNumber(value){
+      if(value === null || value === undefined) return 0;
+      if(typeof value === "number") return Number.isFinite(value) ? value : 0;
+      const text = String(value).trim();
+      if(!text || ["-","/","无","未知","NA","N/A"].includes(text.toUpperCase())) return 0;
+      const cleaned = text.replace(/,/g,"").match(/-?\d+(\.\d+)?/);
+      if(!cleaned) return 0;
+      const number = Number(cleaned[0]);
+      return Number.isFinite(number) ? number : 0;
+    }
     async function importExcel(tableName,event){
       const file=event.target.files&&event.target.files[0];
       if(!file) return;
@@ -227,7 +237,7 @@
             if(String(value ?? "").trim() !== "") hasMatchedContent = true;
           }
         });
-        ["quantity","min_quantity","price","original_weight","current_weight"].forEach(key=>{if(validKeys.has(key)) item[key]=Number(item[key]||0)});
+        ["quantity","min_quantity","price","original_weight","current_weight"].forEach(key=>{if(validKeys.has(key)) item[key]=toNumber(item[key])});
         Object.keys(item).forEach(key=>{if(!validKeys.has(key)) delete item[key]});
         ["name","asset_no","chinese_name","formula","cas"].forEach(key=>{if(key in item)item[key]=String(item[key]||"").trim()});
         return hasMatchedContent ? item : null;
