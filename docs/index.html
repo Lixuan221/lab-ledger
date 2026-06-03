@@ -21,6 +21,7 @@
     let view = "home";
     let msg = "";
     let busy = false;
+    let documentCategory = "仪器操作说明";
 
     function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
     function canWrite(){return profile && (profile.role === "owner" || profile.role === "member")}
@@ -161,12 +162,14 @@
     async function documents(){
       const expected = view;
       document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载实验资料...</div></div>`);
-      const rows=await run(client.from("documents").select("*, profiles(full_name, username)").order("updated_at",{ascending:false})).catch(()=>[]);
+      const rows=await run(client.from("documents").select("*, profiles(full_name, username)").eq("category", documentCategory).order("updated_at",{ascending:false})).catch(()=>[]);
       if(view !== expected) return;
-      const form=canWrite()?`<form class="stack" onsubmit="saveDocument(event)"><div class="grid"><label>标题<input name="title" required></label><label>分类<select name="category"><option>仪器操作说明</option><option>实验方法</option><option>安全规范</option><option>其他</option></select></label><label>适用对象<input name="target" placeholder="例如 PCR 仪、凝胶电泳"></label><label>外部链接<input name="external_link" placeholder="PDF、视频或共享文档链接"></label></div><label>正文<textarea name="content" rows="8" style="resize:vertical;border:1px solid #cfd8dd;border-radius:6px;padding:10px;font:inherit"></textarea></label><button class="primary">新增资料</button></form><br>`:"";
+      const categoryTabs = ["仪器操作说明","实验方法","安全规范","其他"].map(c=>`<button class="${documentCategory===c?"primary":""}" onclick="setDocumentCategory('${c}')">${c}</button>`).join("");
+      const form=canWrite()?`<form class="stack" onsubmit="saveDocument(event)"><input type="hidden" name="category" value="${h(documentCategory)}"><div class="grid"><label>标题<input name="title" required></label><label>适用对象<input name="target" placeholder="例如 PCR 仪、凝胶电泳"></label><label>外部链接<input name="external_link" placeholder="PDF、视频或共享文档链接"></label></div><label>正文<textarea name="content" rows="8" style="resize:vertical;border:1px solid #cfd8dd;border-radius:6px;padding:10px;font:inherit"></textarea></label><button class="primary">新增${h(documentCategory)}</button></form><br>`:"";
       const cards=rows.map(r=>`<div class="panel" style="margin-bottom:12px"><h2>${h(r.title)}</h2><p>${h(r.category)} · ${h(r.target || "通用")} · 更新于 ${new Date(r.updated_at).toLocaleString("zh-CN",{hour12:false})}</p><div style="white-space:pre-wrap;line-height:1.65">${h(r.content)}</div>${r.external_link?`<p style="margin-top:12px"><a href="${h(r.external_link)}" target="_blank" rel="noopener">打开外部链接</a></p>`:""}<p class="muted">发布人：${h(r.profiles ? (r.profiles.full_name || r.profiles.username) : "")}</p><div class="actions">${canWrite()&&(isOwner()||r.author_id===profile.id)?`<button onclick="editDocument('${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="deleteDocument('${r.id}')">删除</button>`:""}</div></div>`).join("");
-      document.getElementById("root").innerHTML=layout(`<div>${form}${cards || `<div class="panel"><div class="loading">暂无实验资料。</div></div>`}</div>`);
+      document.getElementById("root").innerHTML=layout(`<div><div class="panel"><div class="row">${categoryTabs}</div></div><br>${form}${cards || `<div class="panel"><div class="loading">暂无${h(documentCategory)}。</div></div>`}</div>`);
     }
+    function setDocumentCategory(category){documentCategory=category;documents()}
     async function saveDocument(e){
       e.preventDefault();
       const submitButton = e.target.querySelector("button");
