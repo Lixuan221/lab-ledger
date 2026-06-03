@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>实验室共享台账</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:#f5f7f8;color:#1f2933}button,input,select{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;padding:24px}.box{width:min(460px,100%);background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:28px;box-shadow:0 18px 45px rgba(25,48,55,.12)}h1{margin:0 0 6px;font-size:24px}h2{margin:0 0 14px;font-size:18px}p{margin:0 0 18px;color:#66737b}.field{display:grid;gap:6px;margin:12px 0;color:#46565f;font-size:14px}input,select{min-height:38px;border:1px solid #cfd8dd;border-radius:6px;padding:7px 10px;background:white}.primary{min-height:40px;border:0;border-radius:6px;padding:0 16px;background:#16735f;color:#fff;font-weight:650}.shell{min-height:100vh;display:grid;grid-template-columns:230px 1fr}.side{background:#163238;color:#eef7f4;padding:20px 14px}.brand{font-size:20px;font-weight:750;margin-bottom:20px}.nav{display:grid;gap:6px}.nav button{height:40px;border:0;border-radius:6px;background:transparent;color:#dcebe7;text-align:left;padding:0 12px}.nav button.active,.nav button:hover{background:#24515a;color:#fff}.main{padding:24px;overflow:auto}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px}.panel{background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:16px;overflow:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end}.stack{display:grid;gap:12px;max-width:720px}.search{display:flex;gap:10px;margin-bottom:14px}.search input{width:100%}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:10px 12px;border-bottom:1px solid #e7ecef;text-align:left;font-size:14px;vertical-align:top}th{background:#f4f7f8;color:#4d5f68}.msg{padding:10px 12px;border-radius:6px;margin-bottom:12px;background:#eef7f4;border:1px solid #cfe4dd;color:#275d50}.err{background:#fff1f0;border-color:#ffd0cc;color:#a12a21}.actions button{margin-right:6px}.low{color:#b42318;font-weight:700}.muted{color:#66737b;font-size:13px}.row{display:flex;gap:8px;flex-wrap:wrap}@media(max-width:820px){.shell{grid-template-columns:1fr}.side{position:sticky;top:0}.nav{grid-template-columns:repeat(3,1fr)}.main{padding:16px}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const SUPABASE_URL = "https://ashhlhsileqqaardojqu.supabase.co";
+    const SUPABASE_ANON_KEY = "PASTE_SUPABASE_ANON_KEY_HERE";
+    const roles = {owner:"实验室负责人", member:"实验室成员", readonly:"只读成员"};
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let session = null;
+    let profile = null;
+    let view = "home";
+    let msg = "";
+
+    function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+    function canWrite(){return profile && (profile.role === "owner" || profile.role === "member")}
+    function isOwner(){return profile && profile.role === "owner"}
+    async function run(promise){
+      msg = "";
+      const {data, error} = await promise;
+      if(error){msg = error.message || "请求失败"; render(); throw error}
+      return data;
+    }
+    async function init(){
+      const res = await client.auth.getSession();
+      session = res.data.session;
+      if(session) await loadProfile();
+      render();
+    }
+    async function loadProfile(){
+      const user = session.user;
+      let data = await run(client.from("profiles").select("*").eq("id", user.id).maybeSingle()).catch(()=>null);
+      if(!data){
+        data = await run(client.from("profiles").insert({id:user.id, username:user.email, full_name:user.user_metadata.full_name || user.email, role:"member"}).select().single());
+      }
+      profile = data;
+    }
+    async function signIn(e){
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const {data, error} = await client.auth.signInWithPassword({email, password});
+      if(error){msg = error.message; render(); return}
+      session = data.session;
+      await loadProfile();
+      render();
+    }
+    async function signUp(e){
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const fullName = document.getElementById("full_name").value.trim() || email;
+      const {data, error} = await client.auth.signUp({email, password, options:{data:{full_name:fullName}}});
+      if(error){msg = error.message; render(); return}
+      msg = data.session ? "注册成功，已登录" : "注册成功，请按 Supabase 设置确认邮箱后再登录";
+      session = data.session;
+      if(session) await loadProfile();
+      render();
+    }
+    async function logout(){await client.auth.signOut();session=null;profile=null;render()}
+    function layout(content){
+      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["records","历史记录"]];
+      if(isOwner()) tabs.push(["users","用户管理"]);
+      const currentTab = tabs.find(t=>t[0]===view);
+      return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
+    }
+    async function render(){
+      const root=document.getElementById("root");
+      if(SUPABASE_ANON_KEY.includes("PASTE_")){
+        root.innerHTML = `<div class="login"><div class="box"><h1>还需要配置 Supabase Key</h1><p>请把 Supabase 的 anon / publishable key 填到 docs/index.html 里的 SUPABASE_ANON_KEY。</p></div></div>`;
+        return;
+      }
+      if(!session||!profile){
+        root.innerHTML=`<div class="login"><form class="box"><h1>实验室共享台账</h1><p>首次使用请注册；已有账号直接登录。</p>${msg?`<div class="msg err">${h(msg)}</div>`:""}<label class="field">邮箱<input id="email" type="email" required></label><label class="field">姓名<input id="full_name"></label><label class="field">密码<input id="password" type="password" required></label><div class="row"><button class="primary" onclick="signIn(event)">登录</button><button onclick="signUp(event)">注册</button></div><p class="muted" style="margin-top:14px">负责人账号注册后，需要在 Supabase SQL Editor 里把该邮箱设为 owner。</p></form></div>`;return}
+      if(view==="home") return home();
+      if(view==="consumables") return crud("consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""});
+      if(view==="equipment") return crud("equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""});
+      if(view==="inbound"||view==="checkout") return stock(view);
+      if(view==="records") return records();
+      if(view==="users") return users();
+    }
+    async function home(){
+      document.getElementById("root").innerHTML=layout(`<div class="search"><input id="q" placeholder="搜索耗材、设备、规格、位置、负责人" oninput="homeSearch()"></div><div id="results"></div>`);
+      homeSearch();
+    }
+    async function homeSearch(){
+      const q=(document.getElementById("q")||{}).value||"";
+      const consumables=await run(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]);
+      const equipment=await run(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]);
+      document.getElementById("results").innerHTML=`<div class="panel"><h2>耗材库存</h2>${table(consumables,["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>设备登记</h2>${table(equipment,["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
+    }
+    function table(rows, fields, ops){
+      return `<table><thead><tr>${fields.map(f=>`<th>${f.split(":")[1]}</th>`).join("")}${ops?`<th>操作</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr>${fields.map(f=>{const k=f.split(":")[0];return `<td class="${k==="quantity"&&Number(r.quantity)<=Number(r.min_quantity)?"low":""}">${h(r[k])}</td>`}).join("")}${ops?`<td class="actions">${ops(r)}</td>`:""}</tr>`).join("")}</tbody></table>`;
+    }
+    async function crud(tableName,title,fields,defaults){
+      const rows=await run(client.from(tableName).select("*").order("updated_at",{ascending:false})).catch(()=>[]);
+      const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k,v])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(v)}"></label>`).join("")}<button class="primary">新增${title}</button></form>`:"";
+      document.getElementById("root").innerHTML=layout(`<div class="panel">${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
+    }
+    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price"].forEach(k=>{if(k in data)data[k]=Number(data[k]||0)});await run(client.from(tableName).insert(data));render()}
+    async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));render()}
+    async function fillEdit(tableName,id){msg="当前在线版先支持新增和删除；需要修改请删除后重新新增。";render()}
+    async function stock(mode){
+      const items=await run(client.from("consumables").select("*").order("name")).catch(()=>[]);
+      const disabled=!canWrite();
+      const inboundNew = mode==="inbound" ? `<label><input type="checkbox" id="new_item_toggle" onchange="toggleNewItem()"> 新耗材首次入库</label><div id="new_item_fields" style="display:none"><div class="grid"><label>名称<input name="new_name"></label><label>分类<input name="new_category"></label><label>规格<input name="new_specification"></label><label>单位<input name="new_unit" value="件"></label><label>预警线<input name="new_min_quantity" type="number" value="0"></label><label>位置<input name="new_location"></label><label>供应商<input name="new_supplier"></label></div></div>` : "";
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><form class="stack" onsubmit="submitStock(event,'${mode}')"><label>耗材<select name="item_id" id="item_id" ${mode==="checkout"?"required":""}><option value="">请选择已有耗材</option>${items.map(i=>`<option value="${i.id}">${h(i.name)} · 当前 ${i.quantity}${h(i.unit)}</option>`).join("")}</select></label>${inboundNew}<label>数量<input name="quantity" type="number" min="0.01" step="0.01" value="1"></label><label>领用人/经办人<input name="borrower"></label><label>用途<input name="purpose"></label><label>备注<input name="remark"></label><button class="primary" ${disabled?"disabled":""}>${mode==="inbound"?"入库":"领用"}</button></form></div>`);
+    }
+    function toggleNewItem(){const checked=document.getElementById("new_item_toggle").checked;document.getElementById("new_item_fields").style.display=checked?"block":"none";document.getElementById("item_id").disabled=checked}
+    async function submitStock(e,mode){
+      e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.quantity=Number(d.quantity);let itemId=d.item_id;
+      if(mode==="inbound"&&document.getElementById("new_item_toggle")&&document.getElementById("new_item_toggle").checked){
+        const item=await run(client.from("consumables").insert({name:d.new_name,category:d.new_category||"",specification:d.new_specification||"",unit:d.new_unit||"件",quantity:0,min_quantity:Number(d.new_min_quantity||0),location:d.new_location||"",supplier:d.new_supplier||"",remark:d.remark||""}).select().single());
+        itemId=item.id;
+      }
+      await run(client.from("stock_records").insert({item_type:"consumable",item_id:itemId,action:mode,quantity:d.quantity,operator_id:profile.id,borrower:d.borrower||"",purpose:d.purpose||"",remark:d.remark||""}));
+      msg="操作成功";render();
+    }
+    async function records(){
+      const rows=await run(client.from("stock_records").select("*, profiles(full_name, username)").order("created_at",{ascending:false}).limit(300)).catch(()=>[]);
+      document.getElementById("root").innerHTML=layout(`<div class="panel">${table(rows.map(r=>({...r,operator:r.profiles?(r.profiles.full_name||r.profiles.username):""})),["created_at:时间","action:动作","item_type:类型","quantity:数量","operator:操作人","borrower:领用人","purpose:用途","remark:备注"])}</div>`);
+    }
+    async function users(){
+      const rows=await run(client.from("profiles").select("*").order("created_at",{ascending:false})).catch(()=>[]);
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><p class="muted">成员先用邮箱注册；负责人在这里调整角色和状态。</p>${table(rows,["username:邮箱","full_name:姓名","role:角色","is_active:启用","created_at:创建时间"],r=>`<select onchange="updateRole('${r.id}',this.value)"><option value="owner" ${r.role==="owner"?"selected":""}>负责人</option><option value="member" ${r.role==="member"?"selected":""}>成员</option><option value="readonly" ${r.role==="readonly"?"selected":""}>只读</option></select>`)}</div>`);
+    }
+    async function updateRole(id,role){await run(client.from("profiles").update({role}).eq("id",id));render()}
+    async function exportExcel(){
+      const [c,e,r]=await Promise.all([run(client.from("consumables").select("*")),run(client.from("equipment").select("*")),run(client.from("stock_records").select("*"))]);
+      const csv = ["耗材库存", toCsv(c), "", "设备登记", toCsv(e), "", "历史记录", toCsv(r)].join("\n");
+      const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="实验室共享台账.csv";a.click();
+    }
+    function toCsv(rows){if(!rows.length)return "";const keys=Object.keys(rows[0]);return [keys.join(","),...rows.map(r=>keys.map(k=>`"${String(r[k]??"").replaceAll('"','""')}"`).join(","))].join("\n")}
+    client.auth.onAuthStateChange((_event,nextSession)=>{session=nextSession;if(!session){profile=null;render()}});
+    init();
+  </script>
+</body>
+</html>

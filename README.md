@@ -69,6 +69,8 @@ npm run dev
 如果 Render 要求绑卡，请改用 `VERCEL_DEPLOY.md`。
 
 如果 Render/Vercel 都要求验证或绑卡，请改用 `PYTHONANYWHERE_DEPLOY.md`。
+
+当前最推荐的免费在线版是 `GITHUB_PAGES_SUPABASE.md`。
 *** Add File: .gitignore
 .venv/
 node_modules/
