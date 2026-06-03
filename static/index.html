@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>实验室共享台账</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:#f5f7f8;color:#1f2933}button,input,select{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;padding:24px}.box{width:min(420px,100%);background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:28px;box-shadow:0 18px 45px rgba(25,48,55,.12)}h1{margin:0 0 6px;font-size:24px}p{margin:0 0 18px;color:#66737b}.field{display:grid;gap:6px;margin:12px 0;color:#46565f;font-size:14px}input,select{min-height:38px;border:1px solid #cfd8dd;border-radius:6px;padding:7px 10px;background:white}.primary{min-height:40px;border:0;border-radius:6px;padding:0 16px;background:#16735f;color:#fff;font-weight:650}.shell{min-height:100vh;display:grid;grid-template-columns:230px 1fr}.side{background:#163238;color:#eef7f4;padding:20px 14px}.brand{font-size:20px;font-weight:750;margin-bottom:20px}.nav{display:grid;gap:6px}.nav button{height:40px;border:0;border-radius:6px;background:transparent;color:#dcebe7;text-align:left;padding:0 12px}.nav button.active,.nav button:hover{background:#24515a;color:#fff}.main{padding:24px;overflow:auto}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px}.panel{background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:16px;overflow:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end}.stack{display:grid;gap:12px;max-width:680px}.search{display:flex;gap:10px;margin-bottom:14px}.search input{width:100%}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:10px 12px;border-bottom:1px solid #e7ecef;text-align:left;font-size:14px;vertical-align:top}th{background:#f4f7f8;color:#4d5f68}.msg{padding:10px 12px;border-radius:6px;margin-bottom:12px;background:#eef7f4;border:1px solid #cfe4dd;color:#275d50}.err{background:#fff1f0;border-color:#ffd0cc;color:#a12a21}.actions button{margin-right:6px}.low{color:#b42318;font-weight:700}@media(max-width:820px){.shell{grid-template-columns:1fr}.side{position:sticky;top:0}.nav{grid-template-columns:repeat(3,1fr)}.main{padding:16px}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const API = location.origin + "/api";
+    const roles = {owner:"实验室负责人", member:"实验室成员", readonly:"只读成员"};
+    let token = localStorage.token || "";
+    let user = null;
+    try { user = JSON.parse(localStorage.user || "null"); } catch(e) { localStorage.clear(); token = ""; }
+    let view = "home";
+    let msg = "";
+
+    function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+    async function api(path, options={}){
+      msg = "";
+      const res = await fetch(API + path, { ...options, headers:{Authorization:"Bearer "+token, "Content-Type":"application/json", ...(options.headers||{})}});
+      if(!res.ok){
+        const b = await res.json().catch(()=>({detail:"请求失败"}));
+        msg = b.detail || "请求失败";
+        if(res.status === 401){ localStorage.clear(); token = ""; user = null; }
+        render();
+        throw new Error(msg);
+      }
+      return res.json();
+    }
+    async function login(e){
+      e.preventDefault();
+      const usernameInput = document.getElementById("username");
+      const passwordInput = document.getElementById("password");
+      const body = new URLSearchParams({username: usernameInput.value.trim(), password: passwordInput.value});
+      const res = await fetch(API+"/auth/login", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body});
+      const data = await res.json();
+      if(!res.ok){ msg=data.detail||"登录失败"; render(); return; }
+      token=data.access_token; user=data.user; localStorage.token=token; localStorage.user=JSON.stringify(user); render();
+    }
+    function logout(){localStorage.clear();token="";user=null;render()}
+    function layout(content){
+      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["records","历史记录"]];
+      if(user.role==="owner") tabs.push(["users","用户管理"]);
+      const currentTab = tabs.find(t=>t[0]===view);
+      return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(user.full_name||user.username)} · ${roles[user.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 Excel</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("失败")||msg.includes("错误")||msg.includes("无权限")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
+    }
+    async function render(){
+      const root=document.getElementById("root");
+      if(!token||!user){root.innerHTML=`<div class="login"><form class="box" onsubmit="login(event)"><h1>实验室共享台账</h1><p>资产、耗材、入库、领用和历史记录</p>${msg?`<div class="msg err">${h(msg)}</div>`:""}<label class="field">账号<input id="username" value="admin"></label><label class="field">密码<input id="password" type="password" value="admin123"></label><button class="primary">登录</button><p style="margin-top:14px">默认账号：admin / admin123</p></form></div>`;return}
+      if(view==="home") return home();
+      if(view==="consumables") return crud("/consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""});
+      if(view==="equipment") return crud("/equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""});
+      if(view==="inbound"||view==="checkout") return stock(view);
+      if(view==="records") return records();
+      if(view==="users") return users();
+    }
+    async function home(){
+      document.getElementById("root").innerHTML=layout(`<div class="search"><input id="q" placeholder="搜索耗材、设备、规格、位置、负责人" oninput="homeSearch()"></div><div id="results"></div>`);
+      homeSearch();
+    }
+    async function homeSearch(){
+      const qInput = document.getElementById("q");
+      const data=await api("/search?q="+encodeURIComponent(qInput ? qInput.value : "")).catch(()=>({consumables:[],equipment:[]}));
+      document.getElementById("results").innerHTML=`<div class="panel"><h2>耗材库存</h2>${table(data.consumables,["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>设备台账</h2>${table(data.equipment,["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
+    }
+    function table(rows, fields, ops=""){return `<table><thead><tr>${fields.map(f=>`<th>${f.split(":")[1]}</th>`).join("")}${ops?`<th>操作</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr>${fields.map(f=>{const k=f.split(":")[0];return `<td class="${k==="quantity"&&r.quantity<=r.min_quantity?"low":""}">${h(r[k])}</td>`}).join("")}${ops?`<td class="actions">${ops(r)}</td>`:""}</tr>`).join("")}</tbody></table>`}
+    async function crud(endpoint,title,fields,defaults){
+      const canWrite=user.role!=="readonly", canDelete=user.role==="owner";
+      const rows=await api(endpoint).catch(()=>[]);
+      const form=canWrite?`<form class="grid" onsubmit="saveCrud(event,'${endpoint}')">${Object.entries(defaults).map(([k,v])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(v)}"></label>`).join("")}<button class="primary">新增${title}</button></form>`:"";
+      document.getElementById("root").innerHTML=layout(`<div class="panel">${form}${table(rows,fields,r=>`${canDelete?`<button onclick="delItem('${endpoint}',${r.id})">删除</button>`:""}`)}</div>`);
+    }
+    async function saveCrud(e,endpoint){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price"].forEach(k=>{if(k in data)data[k]=Number(data[k])});await api(endpoint,{method:"POST",body:JSON.stringify(data)});render()}
+    async function delItem(endpoint,id){await api(endpoint+"/"+id,{method:"DELETE"});render()}
+    async function stock(mode){
+      const items=await api("/consumables").catch(()=>[]);
+      const disabled=user.role==="readonly";
+      const inboundNew = mode==="inbound" ? `<label><input type="checkbox" id="new_item_toggle" onchange="toggleNewItem()"> 新耗材首次入库</label><div id="new_item_fields" style="display:none"><div class="grid"><label>名称<input name="new_name"></label><label>分类<input name="new_category"></label><label>规格<input name="new_specification"></label><label>单位<input name="new_unit" value="件"></label><label>预警线<input name="new_min_quantity" type="number" value="0"></label><label>位置<input name="new_location"></label><label>供应商<input name="new_supplier"></label></div></div>` : "";
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><form class="stack" onsubmit="submitStock(event,'${mode}')"><label>耗材<select name="item_id" id="item_id" ${mode==="checkout"?"required":""}><option value="">请选择已有耗材</option>${items.map(i=>`<option value="${i.id}">${h(i.name)} · 当前 ${i.quantity}${h(i.unit)}</option>`).join("")}</select></label>${inboundNew}<label>数量<input name="quantity" type="number" min="0.01" step="0.01" value="1"></label><label>领用人/经办人<input name="borrower"></label><label>用途<input name="purpose"></label><label>备注<input name="remark"></label><button class="primary" ${disabled?"disabled":""}>${mode==="inbound"?"入库":"领用"}</button></form></div>`);
+    }
+    function toggleNewItem(){
+      const checked = document.getElementById("new_item_toggle").checked;
+      document.getElementById("new_item_fields").style.display = checked ? "block" : "none";
+      document.getElementById("item_id").disabled = checked;
+    }
+    async function submitStock(e,mode){
+      e.preventDefault();
+      const d=Object.fromEntries(new FormData(e.target));
+      d.item_type="consumable";
+      d.quantity=Number(d.quantity);
+      if(mode==="inbound" && document.getElementById("new_item_toggle") && document.getElementById("new_item_toggle").checked){
+        if(!d.new_name || !d.new_name.trim()){ msg="请填写新耗材名称"; render(); return; }
+        const item = await api("/consumables",{method:"POST",body:JSON.stringify({name:d.new_name.trim(),category:d.new_category||"",specification:d.new_specification||"",unit:d.new_unit||"件",quantity:0,min_quantity:Number(d.new_min_quantity||0),location:d.new_location||"",supplier:d.new_supplier||"",remark:d.remark||""})});
+        d.item_id = item.id;
+      }else{
+        d.item_id=Number(d.item_id);
+      }
+      delete d.new_name; delete d.new_category; delete d.new_specification; delete d.new_unit; delete d.new_min_quantity; delete d.new_location; delete d.new_supplier;
+      await api("/stock/"+mode,{method:"POST",body:JSON.stringify(d)});
+      msg="操作成功";
+      render();
+    }
+    async function records(){const rows=await api("/records").catch(()=>[]);document.getElementById("root").innerHTML=layout(`<div class="panel">${table(rows,["created_at:时间","action:动作","item_type:类型","item_id:对象ID","quantity:数量","borrower:领用人","purpose:用途","remark:备注"])}</div>`)}
+    async function users(){const rows=await api("/users").catch(()=>[]);document.getElementById("root").innerHTML=layout(`<div class="panel"><form class="grid" onsubmit="saveUser(event)"><label>账号<input name="username" required></label><label>姓名<input name="full_name"></label><label>角色<select name="role"><option value="member">实验室成员</option><option value="owner">实验室负责人</option><option value="readonly">只读成员</option></select></label><label>密码<input name="password" type="password" required></label><button class="primary">新增用户</button></form>${table(rows,["username:账号","full_name:姓名","role:角色","is_active:状态","created_at:创建时间"])}</div>`)}
+    async function saveUser(e){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.is_active=true;await api("/users",{method:"POST",body:JSON.stringify(d)});render()}
+    async function exportExcel(){const r=await fetch(API+"/export/excel",{headers:{Authorization:"Bearer "+token}});const b=await r.blob();const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="实验室共享台账.xlsx";a.click()}
+    render();
+  </script>
+</body>
+</html>
