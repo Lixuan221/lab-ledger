@@ -146,7 +146,7 @@
       if(view==="home") return home(seq);
       if(view==="consumables") return crud("consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""},seq);
       if(view==="hazardous_reagents") return crud("hazardous_reagents","危化品",["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"],{chinese_name:"",formula:"",cas:"",quantity:0,original_weight:0,current_weight:0},seq);
-      if(view==="reagents") return crud("reagents","普通化学试剂",["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"],{chinese_name:"",formula:"",cas:"",quantity:0,original_weight:0,current_weight:0},seq);
+      if(view==="reagents") return crud("reagents","普通化学试剂",["chinese_name:中文名","english_name:英文名","quantity:数量","weight_volume:重量/体积"],{chinese_name:"",english_name:"",quantity:0,weight_volume:""},seq);
       if(view==="equipment") return crud("equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""},seq);
       if(view==="inbound"||view==="checkout") return stock(view,seq);
       if(view.startsWith("doc_")) return documents(seq);
@@ -165,7 +165,7 @@
     function renderHomeResults(data, loadingText){
       const results = document.getElementById("results");
       if(!results) return;
-      results.innerHTML=`${loadingText?`<div class="panel"><div class="loading">${h(loadingText)}</div></div><br>`:""}<div class="panel"><h2>耗材库存</h2>${table(data.consumables||[],["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>危化品</h2>${table(data.hazardous||[],["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>普通化学试剂</h2>${table(data.reagents||[],["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>设备登记</h2>${table(data.equipment||[],["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
+      results.innerHTML=`${loadingText?`<div class="panel"><div class="loading">${h(loadingText)}</div></div><br>`:""}<div class="panel"><h2>耗材库存</h2>${table(data.consumables||[],["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>危化品</h2>${table(data.hazardous||[],["chinese_name:中文名","formula:化学式","cas:CAS","quantity:数量","original_weight:原重","current_weight:现有重量"])}</div><br><div class="panel"><h2>普通化学试剂</h2>${table(data.reagents||[],["chinese_name:中文名","english_name:英文名","quantity:数量","weight_volume:重量/体积"])}</div><br><div class="panel"><h2>设备登记</h2>${table(data.equipment||[],["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
     }
     async function homeSearch(seq){
       const searchSeq = ++homeSearchSeq;
@@ -173,7 +173,7 @@
       const [consumables,hazardous,reagents,equipment]=await Promise.all([
         quietRun(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]),
         quietRun(client.from("hazardous_reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
-        quietRun(client.from("reagents").select("*").or(`chinese_name.ilike.%${q}%,formula.ilike.%${q}%,cas.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        quietRun(client.from("reagents").select("*").or(`chinese_name.ilike.%${q}%,english_name.ilike.%${q}%,weight_volume.ilike.%${q}%`).limit(50)).catch(()=>[]),
         quietRun(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[])
       ]);
       if(view !== "home" || seq !== renderSeq || searchSeq !== homeSearchSeq) return;
@@ -245,13 +245,14 @@
         });
         ["quantity","min_quantity","price","original_weight","current_weight"].forEach(key=>{if(validKeys.has(key)) item[key]=toNumber(item[key])});
         Object.keys(item).forEach(key=>{if(!validKeys.has(key)) delete item[key]});
-        ["name","asset_no","chinese_name","formula","cas"].forEach(key=>{if(key in item)item[key]=String(item[key]||"").trim()});
+        ["name","asset_no","chinese_name","english_name","formula","cas","weight_volume"].forEach(key=>{if(key in item)item[key]=String(item[key]||"").trim()});
         return hasMatchedContent ? item : null;
       }).filter(Boolean);
       const data = parsed.filter(item=>{
         if(tableName==="equipment") return item.asset_no && item.name;
         if(tableName==="consumables") return item.name;
-        if(tableName==="hazardous_reagents" || tableName==="reagents") return item.chinese_name || item.formula || item.cas;
+        if(tableName==="hazardous_reagents") return item.chinese_name || item.formula || item.cas;
+        if(tableName==="reagents") return item.chinese_name || item.english_name;
         return true;
       });
       if(!data.length){setInlineStatus(statusId,"没有识别到可导入的数据，请检查第一行表头。",true);return}

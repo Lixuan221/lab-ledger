@@ -26,11 +26,9 @@ create table if not exists public.consumables (
 create table if not exists public.reagents (
   id uuid primary key default gen_random_uuid(),
   chinese_name text not null default '',
-  formula text not null default '',
-  cas text not null default '',
+  english_name text not null default '',
   quantity numeric not null default 0,
-  original_weight numeric not null default 0,
-  current_weight numeric not null default 0,
+  weight_volume text not null default '',
   updated_at timestamptz not null default now()
 );
 
@@ -93,10 +91,12 @@ alter table public.stock_records enable row level security;
 alter table public.documents enable row level security;
 
 alter table public.reagents add column if not exists chinese_name text not null default '';
+alter table public.reagents add column if not exists english_name text not null default '';
 alter table public.reagents add column if not exists formula text not null default '';
 alter table public.reagents add column if not exists cas text not null default '';
 alter table public.reagents add column if not exists original_weight numeric not null default 0;
 alter table public.reagents add column if not exists current_weight numeric not null default 0;
+alter table public.reagents add column if not exists weight_volume text not null default '';
 
 do $$
 begin
