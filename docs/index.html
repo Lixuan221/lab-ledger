@@ -201,23 +201,44 @@
       crudImportConfigs[tableName] = {fields, defaults};
       const editRow = editingCrud && editingCrud.tableName===tableName ? editingCrud.row : null;
       const values = editRow ? {...defaults, ...editRow} : defaults;
-      const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(values[k])}"></label>`).join("")}<button class="primary">${editRow?`保存修改`:`新增${title}`}</button>${editRow?`<button type="button" onclick="cancelEdit()">取消编辑</button>`:""}</form>`:"";
+      const form=canWrite()?`<div><div id="crud_status_${tableName}" class="msg" style="display:none"></div><form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(values[k])}"></label>`).join("")}<button class="primary" data-label="${editRow?`保存修改`:`新增${title}`}">${editRow?`保存修改`:`新增${title}`}</button>${editRow?`<button type="button" onclick="cancelEdit()">取消编辑</button>`:""}</form></div>`:"";
       const importer=canWrite()?`<div class="panel" style="margin-bottom:12px"><h2>Excel 批量导入</h2><p class="muted">第一行表头请使用：${fields.map(f=>f.split(":")[1]).join("、")}。支持 .xlsx、.xls、.csv。</p><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel('${tableName}', event)"><div id="import_status_${tableName}" class="msg" style="display:none"></div></div>`:"";
       document.getElementById("root").innerHTML=layout(`${importer}<div class="panel">${loading?`<div class="loading">正在后台加载${h(title)}...</div>`:""}${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
     }
     async function saveCrud(e,tableName){
       e.preventDefault();
+      const statusId=`crud_status_${tableName}`;
+      const submitButton=e.target.querySelector("button.primary");
+      const buttonLabel=submitButton ? submitButton.dataset.label : "保存";
+      if(submitButton){submitButton.disabled=true;submitButton.textContent="正在保存..."}
+      setInlineStatus(statusId,"正在保存，请稍候...",false);
       const data=Object.fromEntries(new FormData(e.target));
       ["quantity","min_quantity","price","original_weight","current_weight"].forEach(k=>{if(k in data)data[k]=toNumber(data[k])});
-      if(editingCrud && editingCrud.tableName===tableName){
-        await run(client.from(tableName).update(data).eq("id",editingCrud.row.id));
-        editingCrud=null;
-        msg="修改已保存";
-      }else{
-        await run(client.from(tableName).insert(data));
-        msg="新增成功";
+      let savedRow = null;
+      try{
+        if(editingCrud && editingCrud.tableName===tableName){
+          const res=await retryTask(()=>client.from(tableName).update(data).eq("id",editingCrud.row.id).select().single());
+          if(res.error) throw res.error;
+          savedRow=res.data;
+          const cacheKey=`crud:${tableName}`;
+          if(pageCache[cacheKey]){
+            pageCache[cacheKey]=pageCache[cacheKey].map(row=>row.id===savedRow.id?savedRow:row);
+          }
+          editingCrud=null;
+          msg="修改已保存";
+        }else{
+          const res=await retryTask(()=>client.from(tableName).insert(data).select().single());
+          if(res.error) throw res.error;
+          savedRow=res.data;
+          const cacheKey=`crud:${tableName}`;
+          if(pageCache[cacheKey]) pageCache[cacheKey]=[savedRow,...pageCache[cacheKey]];
+          msg="新增成功";
+        }
+      }catch(error){
+        setInlineStatus(statusId,errorText(error),true);
+        if(submitButton){submitButton.disabled=false;submitButton.textContent=buttonLabel}
+        return;
       }
-      delete pageCache[`crud:${tableName}`];
       if(tableName==="consumables") delete pageCache.stockItems;
       delete pageCache.home;
       render();
