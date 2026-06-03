@@ -169,10 +169,27 @@
     }
     async function saveDocument(e){
       e.preventDefault();
+      const submitButton = e.target.querySelector("button");
+      if(submitButton){submitButton.disabled = true; submitButton.textContent = "正在保存...";}
       const data=Object.fromEntries(new FormData(e.target));
+      data.title = (data.title || "").trim();
+      data.content = data.content || "";
+      if(!data.title){
+        msg="请填写资料标题";
+        if(submitButton){submitButton.disabled = false; submitButton.textContent = "新增资料";}
+        render();
+        return;
+      }
       data.author_id=profile.id;
-      await run(client.from("documents").insert(data));
+      const {error}=await client.from("documents").insert(data);
+      if(error){
+        msg=error.message || "资料新增失败";
+        if(submitButton){submitButton.disabled = false; submitButton.textContent = "新增资料";}
+        render();
+        return;
+      }
       msg="资料已新增";
+      e.target.reset();
       render();
     }
     async function editDocument(id){
