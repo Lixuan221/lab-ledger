@@ -67,6 +67,8 @@ npm run dev
 如果想尽量不缴费，请看 `FREE_DEPLOY.md`。
 
 如果 Render 要求绑卡，请改用 `VERCEL_DEPLOY.md`。
+
+如果 Render/Vercel 都要求验证或绑卡，请改用 `PYTHONANYWHERE_DEPLOY.md`。
 *** Add File: .gitignore
 .venv/
 node_modules/
