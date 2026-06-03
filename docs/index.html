@@ -81,7 +81,7 @@
       document.querySelectorAll("#login_buttons button").forEach(btn => btn.disabled = busy);
     }
     function layout(content){
-      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["records","历史记录"]];
+      const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["documents","实验资料"],["records","历史记录"]];
       if(isOwner()) tabs.push(["users","用户管理"]);
       const currentTab = tabs.find(t=>t[0]===view);
       return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="navigate('${t[0]}')">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
@@ -99,6 +99,7 @@
       if(view==="consumables") return crud("consumables","耗材",["name:名称","category:分类","specification:规格","unit:单位","quantity:库存","min_quantity:预警线","location:位置","supplier:供应商","remark:备注"],{name:"",category:"",specification:"",unit:"件",quantity:0,min_quantity:0,location:"",supplier:"",remark:""});
       if(view==="equipment") return crud("equipment","设备登记",["asset_no:资产编号","name:名称","model:型号","owner:负责人","status:状态","location:位置","purchase_date:购置日期","price:价格","remark:备注"],{asset_no:"",name:"",model:"",owner:"",status:"在用",location:"",purchase_date:"",price:0,remark:""});
       if(view==="inbound"||view==="checkout") return stock(view);
+      if(view==="documents") return documents();
       if(view==="records") return records();
       if(view==="users") return users();
     }
@@ -156,6 +157,39 @@
       const rows=await run(client.from("stock_records").select("*, profiles(full_name, username)").order("created_at",{ascending:false}).limit(300)).catch(()=>[]);
       if(view !== expected) return;
       document.getElementById("root").innerHTML=layout(`<div class="panel">${table(rows.map(r=>({...r,operator:r.profiles?(r.profiles.full_name||r.profiles.username):""})),["created_at:时间","action:动作","item_type:类型","quantity:数量","operator:操作人","borrower:领用人","purpose:用途","remark:备注"])}</div>`);
+    }
+    async function documents(){
+      const expected = view;
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载实验资料...</div></div>`);
+      const rows=await run(client.from("documents").select("*, profiles(full_name, username)").order("updated_at",{ascending:false})).catch(()=>[]);
+      if(view !== expected) return;
+      const form=canWrite()?`<form class="stack" onsubmit="saveDocument(event)"><div class="grid"><label>标题<input name="title" required></label><label>分类<select name="category"><option>仪器操作说明</option><option>实验方法</option><option>安全规范</option><option>其他</option></select></label><label>适用对象<input name="target" placeholder="例如 PCR 仪、凝胶电泳"></label><label>外部链接<input name="external_link" placeholder="PDF、视频或共享文档链接"></label></div><label>正文<textarea name="content" rows="8" style="resize:vertical;border:1px solid #cfd8dd;border-radius:6px;padding:10px;font:inherit"></textarea></label><button class="primary">新增资料</button></form><br>`:"";
+      const cards=rows.map(r=>`<div class="panel" style="margin-bottom:12px"><h2>${h(r.title)}</h2><p>${h(r.category)} · ${h(r.target || "通用")} · 更新于 ${new Date(r.updated_at).toLocaleString("zh-CN",{hour12:false})}</p><div style="white-space:pre-wrap;line-height:1.65">${h(r.content)}</div>${r.external_link?`<p style="margin-top:12px"><a href="${h(r.external_link)}" target="_blank" rel="noopener">打开外部链接</a></p>`:""}<p class="muted">发布人：${h(r.profiles ? (r.profiles.full_name || r.profiles.username) : "")}</p><div class="actions">${canWrite()&&(isOwner()||r.author_id===profile.id)?`<button onclick="editDocument('${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="deleteDocument('${r.id}')">删除</button>`:""}</div></div>`).join("");
+      document.getElementById("root").innerHTML=layout(`<div>${form}${cards || `<div class="panel"><div class="loading">暂无实验资料。</div></div>`}</div>`);
+    }
+    async function saveDocument(e){
+      e.preventDefault();
+      const data=Object.fromEntries(new FormData(e.target));
+      data.author_id=profile.id;
+      await run(client.from("documents").insert(data));
+      msg="资料已新增";
+      render();
+    }
+    async function editDocument(id){
+      const row=await run(client.from("documents").select("*").eq("id",id).single());
+      const content=prompt("修改正文内容：", row.content);
+      if(content === null) return;
+      const title=prompt("修改标题：", row.title);
+      if(title === null) return;
+      await run(client.from("documents").update({title, content}).eq("id",id));
+      msg="资料已更新";
+      render();
+    }
+    async function deleteDocument(id){
+      if(!confirm("确定删除这条实验资料吗？")) return;
+      await run(client.from("documents").delete().eq("id",id));
+      msg="资料已删除";
+      render();
     }
     async function users(){
       const expected = view;

@@ -50,10 +50,23 @@ create table if not exists public.stock_records (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  category text not null default '仪器操作说明' check (category in ('仪器操作说明', '实验方法', '安全规范', '其他')),
+  target text not null default '',
+  content text not null default '',
+  external_link text not null default '',
+  author_id uuid references public.profiles(id),
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
 alter table public.profiles enable row level security;
 alter table public.consumables enable row level security;
 alter table public.equipment enable row level security;
 alter table public.stock_records enable row level security;
+alter table public.documents enable row level security;
 
 create or replace function public.current_user_role()
 returns text
@@ -125,6 +138,31 @@ on public.stock_records for insert
 to authenticated
 with check (public.current_user_role() in ('owner', 'member') and operator_id = auth.uid());
 
+drop policy if exists "documents_select_authenticated" on public.documents;
+create policy "documents_select_authenticated"
+on public.documents for select
+to authenticated
+using (true);
+
+drop policy if exists "documents_insert_owner_member" on public.documents;
+create policy "documents_insert_owner_member"
+on public.documents for insert
+to authenticated
+with check (public.current_user_role() in ('owner', 'member') and author_id = auth.uid());
+
+drop policy if exists "documents_update_owner_or_author" on public.documents;
+create policy "documents_update_owner_or_author"
+on public.documents for update
+to authenticated
+using (public.current_user_role() = 'owner' or author_id = auth.uid())
+with check (public.current_user_role() = 'owner' or author_id = auth.uid());
+
+drop policy if exists "documents_delete_owner" on public.documents;
+create policy "documents_delete_owner"
+on public.documents for delete
+to authenticated
+using (public.current_user_role() = 'owner');
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -143,6 +181,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists equipment_set_updated_at on public.equipment;
 create trigger equipment_set_updated_at
 before update on public.equipment
+for each row execute function public.set_updated_at();
+
+drop trigger if exists documents_set_updated_at on public.documents;
+create trigger documents_set_updated_at
+before update on public.documents
 for each row execute function public.set_updated_at();
 
 create or replace function public.apply_stock_record()
