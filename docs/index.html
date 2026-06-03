@@ -6,7 +6,7 @@
   <title>实验室共享台账</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:#f5f7f8;color:#1f2933}button,input,select{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;padding:24px}.box{width:min(460px,100%);background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:28px;box-shadow:0 18px 45px rgba(25,48,55,.12)}h1{margin:0 0 6px;font-size:24px}h2{margin:0 0 14px;font-size:18px}p{margin:0 0 18px;color:#66737b}.field{display:grid;gap:6px;margin:12px 0;color:#46565f;font-size:14px}input,select{min-height:38px;border:1px solid #cfd8dd;border-radius:6px;padding:7px 10px;background:white}.primary{min-height:40px;border:0;border-radius:6px;padding:0 16px;background:#16735f;color:#fff;font-weight:650}.shell{min-height:100vh;display:grid;grid-template-columns:230px 1fr}.side{background:#163238;color:#eef7f4;padding:20px 14px}.brand{font-size:20px;font-weight:750;margin-bottom:20px}.nav{display:grid;gap:6px}.nav button{height:40px;border:0;border-radius:6px;background:transparent;color:#dcebe7;text-align:left;padding:0 12px}.nav button.active,.nav button:hover{background:#24515a;color:#fff}.main{padding:24px;overflow:auto}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px}.panel{background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:16px;overflow:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end}.stack{display:grid;gap:12px;max-width:720px}.search{display:flex;gap:10px;margin-bottom:14px}.search input{width:100%}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:10px 12px;border-bottom:1px solid #e7ecef;text-align:left;font-size:14px;vertical-align:top}th{background:#f4f7f8;color:#4d5f68}.msg{padding:10px 12px;border-radius:6px;margin-bottom:12px;background:#eef7f4;border:1px solid #cfe4dd;color:#275d50}.err{background:#fff1f0;border-color:#ffd0cc;color:#a12a21}.actions button{margin-right:6px}.low{color:#b42318;font-weight:700}.muted{color:#66737b;font-size:13px}.row{display:flex;gap:8px;flex-wrap:wrap}@media(max-width:820px){.shell{grid-template-columns:1fr}.side{position:sticky;top:0}.nav{grid-template-columns:repeat(3,1fr)}.main{padding:16px}}
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:#f5f7f8;color:#1f2933}button,input,select{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;padding:24px}.box{width:min(460px,100%);background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:28px;box-shadow:0 18px 45px rgba(25,48,55,.12)}h1{margin:0 0 6px;font-size:24px}h2{margin:0 0 14px;font-size:18px}p{margin:0 0 18px;color:#66737b}.field{display:grid;gap:6px;margin:12px 0;color:#46565f;font-size:14px}input,select{min-height:38px;border:1px solid #cfd8dd;border-radius:6px;padding:7px 10px;background:white}.primary{min-height:40px;border:0;border-radius:6px;padding:0 16px;background:#16735f;color:#fff;font-weight:650}.shell{min-height:100vh;display:grid;grid-template-columns:230px 1fr}.side{background:#163238;color:#eef7f4;padding:20px 14px}.brand{font-size:20px;font-weight:750;margin-bottom:20px}.nav{display:grid;gap:6px}.nav button{height:40px;border:0;border-radius:6px;background:transparent;color:#dcebe7;text-align:left;padding:0 12px}.nav button.active,.nav button:hover{background:#24515a;color:#fff}.main{padding:24px;overflow:auto}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px}.panel{background:#fff;border:1px solid #dce4e8;border-radius:8px;padding:16px;overflow:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end}.stack{display:grid;gap:12px;max-width:720px}.search{display:flex;gap:10px;margin-bottom:14px}.search input{width:100%}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:10px 12px;border-bottom:1px solid #e7ecef;text-align:left;font-size:14px;vertical-align:top}th{background:#f4f7f8;color:#4d5f68}.msg{padding:10px 12px;border-radius:6px;margin-bottom:12px;background:#eef7f4;border:1px solid #cfe4dd;color:#275d50}.err{background:#fff1f0;border-color:#ffd0cc;color:#a12a21}.actions button{margin-right:6px}.low{color:#b42318;font-weight:700}.muted{color:#66737b;font-size:13px}.loading{color:#66737b;padding:18px 4px}.row{display:flex;gap:8px;flex-wrap:wrap}@media(max-width:820px){.shell{grid-template-columns:1fr}.side{position:sticky;top:0}.nav{grid-template-columns:repeat(3,1fr)}.main{padding:16px}}
   </style>
 </head>
 <body>
@@ -84,8 +84,9 @@
       const tabs=[["home","首页搜索"],["consumables","耗材库存"],["equipment","设备登记"],["inbound","耗材入库"],["checkout","耗材领用"],["records","历史记录"]];
       if(isOwner()) tabs.push(["users","用户管理"]);
       const currentTab = tabs.find(t=>t[0]===view);
-      return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
+      return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="navigate('${t[0]}')">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
     }
+    function navigate(nextView){view=nextView;msg="";render()}
     async function render(){
       const root=document.getElementById("root");
       if(SUPABASE_ANON_KEY.includes("PASTE_")){
@@ -107,15 +108,23 @@
     }
     async function homeSearch(){
       const q=(document.getElementById("q")||{}).value||"";
-      const consumables=await run(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]);
-      const equipment=await run(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]);
+      const results = document.getElementById("results");
+      if(results) results.innerHTML = `<div class="panel"><div class="loading">正在加载...</div></div>`;
+      const [consumables,equipment]=await Promise.all([
+        run(client.from("consumables").select("*").or(`name.ilike.%${q}%,category.ilike.%${q}%,specification.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[]),
+        run(client.from("equipment").select("*").or(`asset_no.ilike.%${q}%,name.ilike.%${q}%,model.ilike.%${q}%,owner.ilike.%${q}%,location.ilike.%${q}%`).limit(50)).catch(()=>[])
+      ]);
+      if(view !== "home") return;
       document.getElementById("results").innerHTML=`<div class="panel"><h2>耗材库存</h2>${table(consumables,["name:名称","category:分类","specification:规格","quantity:库存","unit:单位","location:位置"])}</div><br><div class="panel"><h2>设备登记</h2>${table(equipment,["asset_no:资产编号","name:名称","model:型号","status:状态","owner:负责人","location:位置"])}</div>`;
     }
     function table(rows, fields, ops){
       return `<table><thead><tr>${fields.map(f=>`<th>${f.split(":")[1]}</th>`).join("")}${ops?`<th>操作</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr>${fields.map(f=>{const k=f.split(":")[0];return `<td class="${k==="quantity"&&Number(r.quantity)<=Number(r.min_quantity)?"low":""}">${h(r[k])}</td>`}).join("")}${ops?`<td class="actions">${ops(r)}</td>`:""}</tr>`).join("")}</tbody></table>`;
     }
     async function crud(tableName,title,fields,defaults){
+      const expected = view;
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载${title}...</div></div>`);
       const rows=await run(client.from(tableName).select("*").order("updated_at",{ascending:false})).catch(()=>[]);
+      if(view !== expected) return;
       const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k,v])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(v)}"></label>`).join("")}<button class="primary">新增${title}</button></form>`:"";
       document.getElementById("root").innerHTML=layout(`<div class="panel">${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
     }
@@ -123,7 +132,10 @@
     async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));render()}
     async function fillEdit(tableName,id){msg="当前在线版先支持新增和删除；需要修改请删除后重新新增。";render()}
     async function stock(mode){
+      const expected = view;
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载耗材列表...</div></div>`);
       const items=await run(client.from("consumables").select("*").order("name")).catch(()=>[]);
+      if(view !== expected) return;
       const disabled=!canWrite();
       const inboundNew = mode==="inbound" ? `<label><input type="checkbox" id="new_item_toggle" onchange="toggleNewItem()"> 新耗材首次入库</label><div id="new_item_fields" style="display:none"><div class="grid"><label>名称<input name="new_name"></label><label>分类<input name="new_category"></label><label>规格<input name="new_specification"></label><label>单位<input name="new_unit" value="件"></label><label>预警线<input name="new_min_quantity" type="number" value="0"></label><label>位置<input name="new_location"></label><label>供应商<input name="new_supplier"></label></div></div>` : "";
       document.getElementById("root").innerHTML=layout(`<div class="panel"><form class="stack" onsubmit="submitStock(event,'${mode}')"><label>耗材<select name="item_id" id="item_id" ${mode==="checkout"?"required":""}><option value="">请选择已有耗材</option>${items.map(i=>`<option value="${i.id}">${h(i.name)} · 当前 ${i.quantity}${h(i.unit)}</option>`).join("")}</select></label>${inboundNew}<label>数量<input name="quantity" type="number" min="0.01" step="0.01" value="1"></label><label>领用人/经办人<input name="borrower"></label><label>用途<input name="purpose"></label><label>备注<input name="remark"></label><button class="primary" ${disabled?"disabled":""}>${mode==="inbound"?"入库":"领用"}</button></form></div>`);
@@ -139,11 +151,17 @@
       msg="操作成功";render();
     }
     async function records(){
+      const expected = view;
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载历史记录...</div></div>`);
       const rows=await run(client.from("stock_records").select("*, profiles(full_name, username)").order("created_at",{ascending:false}).limit(300)).catch(()=>[]);
+      if(view !== expected) return;
       document.getElementById("root").innerHTML=layout(`<div class="panel">${table(rows.map(r=>({...r,operator:r.profiles?(r.profiles.full_name||r.profiles.username):""})),["created_at:时间","action:动作","item_type:类型","quantity:数量","operator:操作人","borrower:领用人","purpose:用途","remark:备注"])}</div>`);
     }
     async function users(){
+      const expected = view;
+      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载用户列表...</div></div>`);
       const rows=await run(client.from("profiles").select("*").order("created_at",{ascending:false})).catch(()=>[]);
+      if(view !== expected) return;
       document.getElementById("root").innerHTML=layout(`<div class="panel"><p class="muted">成员先用邮箱注册；负责人在这里调整角色和状态。</p>${table(rows,["username:邮箱","full_name:姓名","role:角色","is_active:启用","created_at:创建时间"],r=>`<select onchange="updateRole('${r.id}',this.value)"><option value="owner" ${r.role==="owner"?"selected":""}>负责人</option><option value="member" ${r.role==="member"?"selected":""}>成员</option><option value="readonly" ${r.role==="readonly"?"selected":""}>只读</option></select>`)}</div>`);
     }
     async function updateRole(id,role){await run(client.from("profiles").update({role}).eq("id",id));render()}
