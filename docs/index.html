@@ -22,6 +22,7 @@
     let msg = "";
     let busy = false;
     let documentCategory = "仪器操作说明";
+    const pageCache = {};
 
     function h(s){return String(s == null ? "" : s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
     function canWrite(){return profile && (profile.role === "owner" || profile.role === "member")}
@@ -87,7 +88,15 @@
       const currentTab = tabs.find(t=>t[0]===view);
       return `<div class="shell"><aside class="side"><div class="brand">实验室共享台账</div><div class="nav">${tabs.map(t=>`<button class="${view===t[0]?"active":""}" onclick="navigate('${t[0]}')">${t[1]}</button>`).join("")}</div></aside><main class="main"><div class="top"><div><h1>${currentTab ? currentTab[1] : ""}</h1><p>${h(profile.full_name||profile.username)} · ${roles[profile.role]}</p></div><div><button class="primary" onclick="exportExcel()">导出 CSV</button> <button onclick="logout()">退出</button></div></div>${msg?`<div class="msg ${msg.includes("error")||msg.includes("失败")||msg.includes("错误")||msg.includes("permission")?"err":""}">${h(msg)}</div>`:""}${content}</main></div>`;
     }
-    function navigate(nextView){view=nextView;msg="";render()}
+    function navigate(nextView){
+      view=nextView;
+      msg="";
+      const root=document.getElementById("root");
+      if(root && session && profile){
+        root.innerHTML=layout(`<div class="panel"><div class="loading">正在打开...</div></div>`);
+      }
+      setTimeout(render, 0);
+    }
     async function render(){
       const root=document.getElementById("root");
       if(SUPABASE_ANON_KEY.includes("PASTE_")){
@@ -124,14 +133,23 @@
     }
     async function crud(tableName,title,fields,defaults){
       const expected = view;
-      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载${title}...</div></div>`);
+      const cacheKey = `crud:${tableName}`;
+      if(pageCache[cacheKey]){
+        renderCrud(tableName,title,fields,defaults,pageCache[cacheKey]);
+      }else{
+        document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载${title}...</div></div>`);
+      }
       const rows=await run(client.from(tableName).select("*").order("updated_at",{ascending:false})).catch(()=>[]);
       if(view !== expected) return;
+      pageCache[cacheKey]=rows;
+      renderCrud(tableName,title,fields,defaults,rows);
+    }
+    function renderCrud(tableName,title,fields,defaults,rows){
       const form=canWrite()?`<form class="grid" onsubmit="saveCrud(event,'${tableName}')">${Object.entries(defaults).map(([k,v])=>`<label>${fields.find(f=>f.startsWith(k+":")).split(":")[1]}<input name="${k}" value="${h(v)}"></label>`).join("")}<button class="primary">新增${title}</button></form>`:"";
       document.getElementById("root").innerHTML=layout(`<div class="panel">${form}${table(rows,fields,r=>`${canWrite()?`<button onclick="fillEdit('${tableName}','${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="delItem('${tableName}','${r.id}')">删除</button>`:""}`)}</div>`);
     }
-    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price"].forEach(k=>{if(k in data)data[k]=Number(data[k]||0)});await run(client.from(tableName).insert(data));render()}
-    async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));render()}
+    async function saveCrud(e,tableName){e.preventDefault();const data=Object.fromEntries(new FormData(e.target));["quantity","min_quantity","price"].forEach(k=>{if(k in data)data[k]=Number(data[k]||0)});await run(client.from(tableName).insert(data));delete pageCache[`crud:${tableName}`];render()}
+    async function delItem(tableName,id){await run(client.from(tableName).delete().eq("id",id));delete pageCache[`crud:${tableName}`];render()}
     async function fillEdit(tableName,id){msg="当前在线版先支持新增和删除；需要修改请删除后重新新增。";render()}
     async function stock(mode){
       const expected = view;
@@ -163,9 +181,18 @@
       const categoryByView = {doc_instrument:"仪器操作说明", doc_method:"实验方法", doc_safety:"安全规范", doc_other:"其他"};
       documentCategory = categoryByView[view] || "仪器操作说明";
       const expected = view;
-      document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载${h(documentCategory)}...</div></div>`);
+      const cacheKey = `documents:${documentCategory}`;
+      if(pageCache[cacheKey]){
+        renderDocuments(pageCache[cacheKey]);
+      }else{
+        document.getElementById("root").innerHTML=layout(`<div class="panel"><div class="loading">正在加载${h(documentCategory)}...</div></div>`);
+      }
       const rows=await run(client.from("documents").select("*, profiles(full_name, username)").eq("category", documentCategory).order("updated_at",{ascending:false})).catch(()=>[]);
       if(view !== expected) return;
+      pageCache[cacheKey]=rows;
+      renderDocuments(rows);
+    }
+    function renderDocuments(rows){
       const form=canWrite()?`<form class="stack" onsubmit="saveDocument(event)"><input type="hidden" name="category" value="${h(documentCategory)}"><div class="grid"><label>标题<input name="title" required></label><label>适用对象<input name="target" placeholder="例如 PCR 仪、凝胶电泳"></label><label>外部链接<input name="external_link" placeholder="PDF、视频或共享文档链接"></label></div><label>正文<textarea name="content" rows="8" style="resize:vertical;border:1px solid #cfd8dd;border-radius:6px;padding:10px;font:inherit"></textarea></label><button class="primary">新增${h(documentCategory)}</button></form><br>`:"";
       const cards=rows.map(r=>`<div class="panel" style="margin-bottom:12px"><h2>${h(r.title)}</h2><p>${h(r.category)} · ${h(r.target || "通用")} · 更新于 ${new Date(r.updated_at).toLocaleString("zh-CN",{hour12:false})}</p><div style="white-space:pre-wrap;line-height:1.65">${h(r.content)}</div>${r.external_link?`<p style="margin-top:12px"><a href="${h(r.external_link)}" target="_blank" rel="noopener">打开外部链接</a></p>`:""}<p class="muted">发布人：${h(r.profiles ? (r.profiles.full_name || r.profiles.username) : "")}</p><div class="actions">${canWrite()&&(isOwner()||r.author_id===profile.id)?`<button onclick="editDocument('${r.id}')">编辑</button>`:""}${isOwner()?`<button onclick="deleteDocument('${r.id}')">删除</button>`:""}</div></div>`).join("");
       document.getElementById("root").innerHTML=layout(`<div>${form}${cards || `<div class="panel"><div class="loading">暂无${h(documentCategory)}。</div></div>`}</div>`);
@@ -192,6 +219,7 @@
         return;
       }
       msg="资料已新增";
+      delete pageCache[`documents:${data.category}`];
       e.target.reset();
       render();
     }
@@ -203,12 +231,14 @@
       if(title === null) return;
       await run(client.from("documents").update({title, content}).eq("id",id));
       msg="资料已更新";
+      Object.keys(pageCache).filter(k=>k.startsWith("documents:")).forEach(k=>delete pageCache[k]);
       render();
     }
     async function deleteDocument(id){
       if(!confirm("确定删除这条实验资料吗？")) return;
       await run(client.from("documents").delete().eq("id",id));
       msg="资料已删除";
+      Object.keys(pageCache).filter(k=>k.startsWith("documents:")).forEach(k=>delete pageCache[k]);
       render();
     }
     async function users(){
